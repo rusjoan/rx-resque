@@ -1,0 +1,21 @@
+{
+    "name": "recons/rx-resque",
+    "require": {
+        "react/event-loop": "^0.4.2",
+        "react/promise": "^2.5",
+        "reactivex/rxphp": "^1.5",
+        "clue/redis-react": "^1.0"
+    },
+    "authors": [
+        {
+            "name": "recons",
+            "email": "sergej.gorodnichev@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "RxResque\\": "src"
+        }
+    },
+    "minimum-stability": "dev"
+}
