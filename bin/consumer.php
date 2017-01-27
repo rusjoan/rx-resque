@@ -9,7 +9,7 @@ $factory = new Factory($loop);
 $client = new \RxResque\Client\RedisClient($factory);
 
 $pollRedis = function ($queue, $interval = 10) use ($client) {
-    return $client->blpop('queue', $interval);
+    return $client->blpop($queue, $interval);
 };
 
 $pauser = new \Rx\Subject\Subject();
