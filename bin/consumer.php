@@ -8,9 +8,8 @@ $loop = \React\EventLoop\Factory::create();
 $factory = new Factory($loop);
 $client = new \RxResque\Client\RedisClient($factory);
 
-$f = function () use ($client) {
-    var_dump('CALLED');
-    return $client->blpop('queue', 10);
+$pollRedis = function ($queue, $interval = 10) use ($client) {
+    return $client->blpop('queue', $interval);
 };
 
 $pauser = new \Rx\Subject\Subject();
@@ -18,8 +17,8 @@ $pool = new \RxResque\WorkerPool(5, $pauser, $loop);
 
 /** @var Observable $redisStream */
 $redisStream = Observable::start(function () {})
-    ->flatMap(function () use ($f) {
-        return Rx\React\Promise::toObservable($f());
+    ->flatMap(function () use ($pollRedis) {
+        return Rx\React\Promise::toObservable($pollRedis('queue'));
     })
     ->repeat()
     ->_RxResque_pausable($pauser);
