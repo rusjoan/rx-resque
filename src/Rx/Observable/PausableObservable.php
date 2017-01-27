@@ -33,23 +33,24 @@ class PausableObservable extends Observable
 
     public function subscribe(ObserverInterface $observer, $scheduler = null)
     {
+        $disposableEmpty = new EmptyDisposable();
         $published = $this->source->publish();
-        $subscription = $published->subscribe($observer);
-        $connection = new EmptyDisposable();
+        $subscription = $published->subscribe($observer, $scheduler);
+        $connection = $disposableEmpty;
 
         $pausable = $this->pauser
-            ->startWith(!$this->paused)
             ->distinctUntilChanged()
-            ->subscribeCallback(function ($value) use (&$published, &$connection) {
-                if ($value) {
-                    $connection = $published->connect();
-                } else {
-                    $connection->dispose();
-                    $connection = new EmptyDisposable();
+            ->subscribeCallback(
+                function ($value) use ($published, &$connection, $disposableEmpty) {
+                    if ($value) {
+                        $connection = $published->connect();
+                    } else {
+                        $connection->dispose();
+                        $connection = $disposableEmpty;
+                    }
                 }
-            });
+            );
 
         return new CompositeDisposable([$subscription, $connection, $pausable]);
     }
-
 }

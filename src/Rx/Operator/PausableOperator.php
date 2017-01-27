@@ -6,6 +6,7 @@
 
 namespace RxResque\Rx\Operator;
 
+use Rx\Disposable\CallbackDisposable;
 use Rx\ObservableInterface;
 use Rx\ObserverInterface;
 use Rx\Operator\OperatorInterface;
@@ -31,7 +32,9 @@ class PausableOperator implements OperatorInterface
      */
     public function __invoke(ObservableInterface $observable, ObserverInterface $observer, SchedulerInterface $scheduler = null)
     {
-        return (new PausableObservable($observable, $this->pauser))
-            ->subscribe($observer);
+        $pausable = new PausableObservable($observable, $this->pauser);
+
+        return $pausable->subscribe($observer, $scheduler);
+
     }
 }

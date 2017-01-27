@@ -34,7 +34,7 @@ class WorkerPool
     }
 
     public function recieve() {
-        $this->loop->addTimer(6, function () {
+        $this->loop->addTimer(rand(3, 10), function () {
             --$this->active;
             $isFree = $this->size > $this->active;
             $this->pauser->onNext($isFree);

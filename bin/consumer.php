@@ -6,43 +6,37 @@ use Clue\React\Redis\Factory;
 require_once __DIR__ . '/../vendor/autoload.php';
 $loop = \React\EventLoop\Factory::create();
 $factory = new Factory($loop);
-
 $client = new \RxResque\Client\RedisClient($factory);
 
 $f = function () use ($client) {
     var_dump('CALLED');
-    return $client->blpop('queue', 10)
-        ->then(function ($result) {
-            if (!is_array($result) || count($result) < 2) {
-                throw new \Exception('Empty result, retry');
-            }
-            return $result[1];
-        });
+    return $client->blpop('queue', 10);
 };
 
 $pauser = new \Rx\Subject\Subject();
-$pool = new \RxResque\WorkerPool(1, $pauser, $loop);
-$source = Observable::start(function () {})
+$pool = new \RxResque\WorkerPool(5, $pauser, $loop);
+
+/** @var Observable $redisStream */
+$redisStream = Observable::start(function () {})
     ->flatMap(function () use ($f) {
         return Rx\React\Promise::toObservable($f());
     })
-    ->retry()
-    ->_RxResque_pausable($pauser)
     ->repeat()
-    ->share();
+    ->_RxResque_pausable($pauser);
 
-$source->subscribe(new Rx\Observer\CallbackObserver(
-    function ($value) use ($pool) {
-        $pool->submit($value);
-        echo "Next value: " . $value . "\n";
-    },
-    function (\Exception $error) {
-        echo "Exception: " . $error->getMessage() . "\n";
-    },
-    function () {
-        echo "Complete!\n";
+$taskStream = $redisStream
+    ->filter(function ($result) {
+        return is_array($result) && count($result) === 2;
+    })
+    ->map(function (array $result) {
+        return $result[1];
+    });
+
+$taskStream->subscribeCallback(
+    function ($task) use ($pool) {
+        $pool->submit($task);
     }
-));
+);
 $pauser->onNext(true);
 
 $loop->run();
