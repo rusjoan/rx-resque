@@ -18,7 +18,7 @@ $pollRedis = function ($queue, $interval = 10) use ($client) {
 
 $pauser = new \Rx\Subject\Subject();
 
-$pool = new WorkerPool($loop);
+$pool = new WorkerPool($loop, 0, 4);
 $pool->on('status', function ($isIdle) use ($pauser) {
     $pauser->onNext($isIdle);
 });

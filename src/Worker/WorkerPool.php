@@ -35,20 +35,20 @@ class WorkerPool extends EventEmitter implements PoolInterface
     /** @var bool */
     private $running = false;
 
-    public function __construct(LoopInterface $loop, int $minSize = null, int $maxSize= null)
+    public function __construct(LoopInterface $loop, int $minSize = -1, int $maxSize= -1)
     {
         $this->loop = $loop;
 
-        if ($minSize < 0) {
+        $this->minSize = $minSize === -1 ? self::DEFAULT_MIN_SIZE : $minSize;
+        $this->maxSize = $maxSize === -1 ? self::DEFAULT_MAX_SIZE : $minSize;
+
+        if ($this->minSize < 0) {
             throw new \Error('Minimum size must be a non-negative integer.');
         }
 
-        if ($maxSize < 0 || $maxSize < $minSize) {
-            throw new \Error('Maximum size must be a non-negative integer at least '.$minSize.'.');
+        if ($this->maxSize < 0 || $this->maxSize < $this->minSize) {
+            throw new \Error('Maximum size must be a non-negative integer at least ' . $minSize . '.');
         }
-
-        $this->minSize = $minSize ?: self::DEFAULT_MIN_SIZE;
-        $this->maxSize = $maxSize ?: self::DEFAULT_MAX_SIZE;
 
         $this->workers = new \SplObjectStorage();
         $this->idleWorkers = new \SplQueue();
@@ -100,7 +100,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
      */
     public function isIdle(): bool
     {
-        return $this->idleWorkers->count() > 0;
+        return $this->idleWorkers->count() > 0 || $this->workers->count() < $this->maxSize;
     }
 
     /**
