@@ -1,9 +1,13 @@
+#!/usr/bin/env php
 <?php
-use Rx\Observable;
-use Rx\ObserverInterface;
-use Clue\React\Redis\Factory;
+declare(strict_types = 1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
+
+use Clue\React\Redis\Factory;
+use Rx\Observable;
+use RxResque\Worker\WorkerPool;
+
 $loop = \React\EventLoop\Factory::create();
 $factory = new Factory($loop);
 $client = new \RxResque\Client\RedisClient($factory);
@@ -13,7 +17,11 @@ $pollRedis = function ($queue, $interval = 10) use ($client) {
 };
 
 $pauser = new \Rx\Subject\Subject();
-$pool = new \RxResque\WorkerPool(5, $pauser, $loop);
+
+$pool = new WorkerPool($loop);
+$pool->on('status', function ($isIdle) use ($pauser) {
+    $pauser->onNext($isIdle);
+});
 
 /** @var Observable $redisStream */
 $redisStream = Observable::start(function () {})
@@ -33,9 +41,9 @@ $taskStream = $redisStream
 
 $taskStream->subscribeCallback(
     function ($task) use ($pool) {
-        $pool->submit($task);
+        echo json_encode($task) . PHP_EOL;
     }
 );
-$pauser->onNext(true);
 
+$pool->start();
 $loop->run();

@@ -1,10 +1,12 @@
 {
     "name": "recons/rx-resque",
+    "version": "0.0.1",
     "require": {
         "react/event-loop": "^0.4.2",
         "react/promise": "^2.5",
         "reactivex/rxphp": "^1.5",
-        "clue/redis-react": "^1.0"
+        "clue/redis-react": "^1.0",
+        "react/child-process": "^0.4.1"
     },
     "authors": [
         {
