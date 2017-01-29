@@ -1,1 +1,2 @@
-# Rx Resque
+# Reactive Resque Consumer
+

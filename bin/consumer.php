@@ -6,6 +6,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Clue\React\Redis\Factory;
 use Rx\Observable;
+use RxResque\SampleTask;
 use RxResque\Worker\WorkerPool;
 
 $loop = \React\EventLoop\Factory::create();
@@ -36,14 +37,24 @@ $taskStream = $redisStream
         return is_array($result) && count($result) === 2;
     })
     ->map(function (array $result) {
-        return $result[1];
+        return new SampleTask($result[1]);
     });
 
 $taskStream->subscribeCallback(
-    function ($task) use ($pool) {
-        echo json_encode($task) . PHP_EOL;
+    function (\RxResque\Worker\TaskInterface $task) use ($pool) {
+        $pool->enqueue($task)
+            ->then(function ($data) use ($task) {
+               echo "TASK $task->value done!\n";
+            });
+    },
+    function (\Throwable $exeption) {
+        throw $exeption;
     }
 );
+
+$loop->addPeriodicTimer(5, function () use ($pool) {
+   printf("Active: %d, Free: %d\n", $pool->getBusyWorkerCount(), $pool->getIdleWorkerCount());
+});
 
 $pool->start();
 $loop->run();

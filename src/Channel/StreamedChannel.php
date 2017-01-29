@@ -33,7 +33,8 @@ class StreamedChannel implements ChannelInterface
      */
     public function publish($data)
     {
-        $this->write->write($data);
+        $serialized = serialize($data);
+        $this->write->write($serialized);
     }
 
     /**
@@ -44,11 +45,17 @@ class StreamedChannel implements ChannelInterface
         $this->subject->subscribeCallback($onData, $onError);
 
         try {
-            $this->read->on('data', function ($data) {
-               $this->subject->onNext($data);
+            $this->read->on('data', function ($serialized) {
+                try {
+                    $data = unserialize($serialized);
+                    $this->subject->onNext($data);
+                } catch (\Throwable $exception) {
+                    throw new \Exception('Serialization');
+                }
             });
 
             $this->read->on('close', function ($output) {
+                throw new \Exception('Process died');
                 $this->subject->onCompleted();
             });
         } catch (\Throwable $exception) {

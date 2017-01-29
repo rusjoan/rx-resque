@@ -40,7 +40,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
         $this->loop = $loop;
 
         $this->minSize = $minSize === -1 ? self::DEFAULT_MIN_SIZE : $minSize;
-        $this->maxSize = $maxSize === -1 ? self::DEFAULT_MAX_SIZE : $minSize;
+        $this->maxSize = $maxSize === -1 ? self::DEFAULT_MAX_SIZE : $maxSize;
 
         if ($this->minSize < 0) {
             throw new \Error('Minimum size must be a non-negative integer.');
@@ -69,6 +69,11 @@ class WorkerPool extends EventEmitter implements PoolInterface
     public function getIdleWorkerCount(): int
     {
         return $this->idleWorkers->count();
+    }
+
+    public function getBusyWorkerCount(): int
+    {
+        return $this->busyWorkers->count();
     }
 
     /**
@@ -128,7 +133,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
      *
      * @return WorkerInterface The worker created.
      */
-    private function createWorker() {
+    private function createWorker(): WorkerInterface {
         $worker = new ProcessWorker($this->loop);
         $worker->start();
 
@@ -142,7 +147,12 @@ class WorkerPool extends EventEmitter implements PoolInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        // TODO: Implement enqueue() method.
+        $worker = $this->pull();
+
+        return $worker->enqueue($task)
+            ->always(function () use ($worker) {
+                $this->push($worker);
+            });
     }
 
     /**
@@ -159,5 +169,45 @@ class WorkerPool extends EventEmitter implements PoolInterface
     public function kill()
     {
         // TODO: Implement kill() method.
+    }
+
+    protected function pull(): WorkerInterface
+    {
+        if (!$this->isRunning()) {
+            throw new \Exception("The queue is not running");
+        }
+
+        if (!$this->idleWorkers->isEmpty()) {
+            $worker = $this->idleWorkers->shift();
+        } elseif ($this->workers->count() < $this->maxSize) {
+            $worker = $this->createWorker();
+        } else {
+            throw new \Exception('All possible workers busy');
+        }
+
+        $this->busyWorkers->push($worker);
+        $this->workers[$worker] += 1;
+        $this->emit('status', [$this->isIdle()]);
+
+        return $worker;
+    }
+
+    protected function push(WorkerInterface $worker)
+    {
+        if (!$this->workers->contains($worker)) {
+            throw new \Exception("The provided worker was not part of this queue");
+        }
+        if (($this->workers[$worker] -= 1) === 0) {
+            // Worker is completely idle, remove from busy queue and add to idle queue.
+            foreach ($this->busyWorkers as $key => $busy) {
+                if ($busy === $worker) {
+                    unset($this->busyWorkers[$key]);
+                    break;
+                }
+            }
+
+            $this->idleWorkers->push($worker);
+            $this->emit('status', [$this->isIdle()]);
+        }
     }
 }

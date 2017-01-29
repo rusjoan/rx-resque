@@ -22,6 +22,9 @@ class ProcessWorker implements WorkerInterface
     /** @var Deferred */
     private $current;
 
+    /** @var bool */
+    private $shutdown = false;
+
     public function __construct(LoopInterface $loop)
     {
         $dir = \dirname(__DIR__, 2) . '/bin';
@@ -50,6 +53,21 @@ class ProcessWorker implements WorkerInterface
     public function start()
     {
         $this->strand->start();
+        $this->strand->subscribe(
+            function ($data) {
+                if ($this->isIdle()) {
+                    throw new \Exception('kek');
+                }
+
+                $deferred = $this->current;
+                $this->current = null;
+
+                return $deferred->resolve($data);
+            },
+            function () {
+                throw new \Exception('Error occurred');
+            }
+        );
     }
 
     /**
@@ -57,7 +75,23 @@ class ProcessWorker implements WorkerInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        // TODO: Implement enqueue() method.
+        if (!$this->strand->isRunning()) {
+            throw new \Exception('The worker has not been started.');
+        }
+
+        if ($this->shutdown) {
+            throw new \Exception('The worker has been shut down.');
+        }
+
+        try {
+            $this->current = $deferred = new Deferred();
+            $this->strand->publish($task);
+        } catch (\Throwable $exception) {
+            //$this->kill();
+            throw new \Exception('Sending the task to the worker failed.', 0, $exception);
+        }
+
+        return $deferred->promise();
     }
 
     /**

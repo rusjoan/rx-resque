@@ -33,9 +33,16 @@ ob_start(function ($data) {
 
 $loop = \React\EventLoop\Factory::create();
 
-$loop->addPeriodicTimer(5, function() {
-    echo 123;
-});
+$channel = new \RxResque\Channel\StreamedChannel(new \React\Stream\Stream(STDIN, $loop), new \React\Stream\Stream(STDOUT, $loop));
+$channel->subscribe(
+    function ($task) use ($channel) {
+        $task->run();
+        $channel->publish('done');
+    },
+    function () {
+
+    }
+);
 
 $loop->run();
 
