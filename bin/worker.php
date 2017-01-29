@@ -37,7 +37,7 @@ $channel = new \RxResque\Channel\StreamedChannel(new \React\Stream\Stream(STDIN,
 $channel->subscribe(
     function ($task) use ($channel) {
         $task->run();
-        $channel->publish('done');
+        $channel->publish($task->value);
     },
     function () {
 

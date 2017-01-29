@@ -44,7 +44,7 @@ $taskStream->subscribeCallback(
     function (\RxResque\Worker\TaskInterface $task) use ($pool) {
         $pool->enqueue($task)
             ->then(function ($data) use ($task) {
-               echo "TASK $task->value done!\n";
+               echo "SENT $task->value RECEIVED $data done!\n";
             });
     },
     function (\Throwable $exeption) {
@@ -52,7 +52,7 @@ $taskStream->subscribeCallback(
     }
 );
 
-$loop->addPeriodicTimer(5, function () use ($pool) {
+$loop->addPeriodicTimer(10, function () use ($pool) {
    printf("Active: %d, Free: %d\n", $pool->getBusyWorkerCount(), $pool->getIdleWorkerCount());
 });
 
