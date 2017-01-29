@@ -19,7 +19,7 @@ $pollRedis = function ($queue, $interval = 10) use ($client) {
 
 $pauser = new \Rx\Subject\Subject();
 
-$pool = new WorkerPool($loop, 0, 4);
+$pool = new WorkerPool($loop, 0, 1);
 $pool->on('status', function ($isIdle) use ($pauser) {
     $pauser->onNext($isIdle);
 });
@@ -41,7 +41,7 @@ $taskStream = $redisStream
     });
 
 $taskStream->subscribeCallback(
-    function (\RxResque\Worker\TaskInterface $task) use ($pool) {
+    function (\RxResque\Task\TaskInterface $task) use ($pool) {
         $pool->enqueue($task)
             ->then(function ($data) use ($task) {
                echo "SENT $task->value RECEIVED $data done!\n";

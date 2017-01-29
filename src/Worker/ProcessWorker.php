@@ -13,6 +13,7 @@ use React\Promise\Deferred;
 use React\Promise\Promise;
 use RxResque\Process\ChanneledProcess;
 use RxResque\StrandInterface;
+use RxResque\Task\TaskInterface;
 
 class ProcessWorker implements WorkerInterface
 {
@@ -65,7 +66,7 @@ class ProcessWorker implements WorkerInterface
                 return $deferred->resolve($data);
             },
             function () {
-                throw new \Exception('Error occurred');
+                return $this->current->reject();
             }
         );
     }
@@ -87,7 +88,6 @@ class ProcessWorker implements WorkerInterface
             $this->current = $deferred = new Deferred();
             $this->strand->publish($task);
         } catch (\Throwable $exception) {
-            //$this->kill();
             throw new \Exception('Sending the task to the worker failed.', 0, $exception);
         }
 

@@ -42,7 +42,7 @@ class StreamedChannel implements ChannelInterface
      */
     public function subscribe(callable $onData, callable $onError)
     {
-        $this->subject->subscribeCallback($onData, $onError);
+        $this->subject->subscribeCallback($onData, $onError, $onError);
 
         try {
             $this->read->on('data', function ($serialized) {
@@ -55,7 +55,6 @@ class StreamedChannel implements ChannelInterface
             });
 
             $this->read->on('close', function ($output) {
-                throw new \Exception('Process died');
                 $this->subject->onCompleted();
             });
         } catch (\Throwable $exception) {

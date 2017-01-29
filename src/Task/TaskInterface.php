@@ -6,7 +6,7 @@
  * Time: 14:41
  */
 
-namespace RxResque\Worker;
+namespace RxResque\Task;
 
 interface TaskInterface
 {

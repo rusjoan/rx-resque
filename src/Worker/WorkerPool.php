@@ -11,6 +11,7 @@ namespace RxResque\Worker;
 use Evenement\EventEmitter;
 use React\EventLoop\LoopInterface;
 use React\Promise\Promise;
+use RxResque\Task\TaskInterface;
 
 class WorkerPool extends EventEmitter implements PoolInterface
 {
@@ -149,7 +150,15 @@ class WorkerPool extends EventEmitter implements PoolInterface
     {
         $worker = $this->pull();
 
+        $timer = $this->loop->addTimer(60, function () use ($worker) {
+            $worker->kill();
+        });
+
         return $worker->enqueue($task)
+            ->progress(func)
+            ->always(function () use ($timer) {
+                $timer->cancel();
+            })
             ->always(function () use ($worker) {
                 $this->push($worker);
             });
@@ -174,7 +183,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
     protected function pull(): WorkerInterface
     {
         if (!$this->isRunning()) {
-            throw new \Exception("The queue is not running");
+            throw new \Exception("The pool is not running");
         }
 
         if (!$this->idleWorkers->isEmpty()) {
@@ -186,7 +195,6 @@ class WorkerPool extends EventEmitter implements PoolInterface
         }
 
         $this->busyWorkers->push($worker);
-        $this->workers[$worker] += 1;
         $this->emit('status', [$this->isIdle()]);
 
         return $worker;
@@ -197,17 +205,16 @@ class WorkerPool extends EventEmitter implements PoolInterface
         if (!$this->workers->contains($worker)) {
             throw new \Exception("The provided worker was not part of this queue");
         }
-        if (($this->workers[$worker] -= 1) === 0) {
-            // Worker is completely idle, remove from busy queue and add to idle queue.
-            foreach ($this->busyWorkers as $key => $busy) {
-                if ($busy === $worker) {
-                    unset($this->busyWorkers[$key]);
-                    break;
-                }
-            }
 
+        $key = array_search($worker, (array)$this->busyWorkers);
+        unset($this->busyWorkers[$key]);
+
+        if ($worker->isRunning()) {
             $this->idleWorkers->push($worker);
-            $this->emit('status', [$this->isIdle()]);
+        } else {
+            $this->workers->detach($worker);
         }
+
+        $this->emit('status', [$this->isIdle()]);
     }
 }

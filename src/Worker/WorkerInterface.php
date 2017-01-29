@@ -10,6 +10,7 @@ namespace RxResque\Worker;
 
 use React\Promise\Promise;
 use RxResque\ContextInterface;
+use RxResque\Task\TaskInterface;
 
 interface WorkerInterface extends ContextInterface
 {

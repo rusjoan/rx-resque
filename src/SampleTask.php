@@ -8,7 +8,7 @@
 
 namespace RxResque;
 
-use RxResque\Worker\TaskInterface;
+use RxResque\Task\TaskInterface;
 
 class SampleTask implements TaskInterface
 {
