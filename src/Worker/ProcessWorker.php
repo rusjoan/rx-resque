@@ -20,8 +20,8 @@ class ProcessWorker implements WorkerInterface
     /** @var StrandInterface */
     private $strand;
 
-    /** @var Deferred */
-    private $current;
+    /** @var \SplObjectStorage */
+    private $taskStorage;
 
     /** @var bool */
     private $shutdown = false;
@@ -30,6 +30,7 @@ class ProcessWorker implements WorkerInterface
     {
         $dir = \dirname(__DIR__, 2) . '/bin';
         $this->strand = new ChanneledProcess($loop, "$dir/worker.php", $dir);
+        $this->taskStorage = new \SplObjectStorage();
     }
 
     /**
@@ -45,7 +46,7 @@ class ProcessWorker implements WorkerInterface
      */
     public function isIdle(): bool
     {
-        return $this->current === null;
+        return $this->taskStorage->count() === 0;
     }
 
     /**
@@ -54,21 +55,6 @@ class ProcessWorker implements WorkerInterface
     public function start()
     {
         $this->strand->start();
-        $this->strand->subscribe(
-            function ($data) {
-                if ($this->isIdle()) {
-                    throw new \Exception('kek');
-                }
-
-                $deferred = $this->current;
-                $this->current = null;
-
-                return $deferred->resolve($data);
-            },
-            function () {
-                return $this->current->reject();
-            }
-        );
     }
 
     /**
@@ -76,22 +62,35 @@ class ProcessWorker implements WorkerInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        if (!$this->strand->isRunning()) {
-            throw new \Exception('The worker has not been started.');
+        $this->taskStorage->attach($task);
+        $deferred = new Deferred();
+
+        switch (true) {
+            case !$this->strand->isRunning():
+                $deferred->reject(new \Exception('The worker has not been started.'));
+                break;
+            case $this->shutdown:
+                $deferred->reject(new \Exception('The worker has been shut down.'));
+                break;
+            default:
+                $this->strand->send($task);
+                $deferred->resolve($this->strand->receive());
+                /*
+                    ->then(
+                        function ($data) use ($deferred) {
+                            $deferred->resolve($data);
+                        },
+                        function (\Throwable $exception) use ($deferred) {
+                            $deferred->reject($exception);
+                        }
+                    );*/
+                break;
         }
 
-        if ($this->shutdown) {
-            throw new \Exception('The worker has been shut down.');
-        }
-
-        try {
-            $this->current = $deferred = new Deferred();
-            $this->strand->publish($task);
-        } catch (\Throwable $exception) {
-            throw new \Exception('Sending the task to the worker failed.', 0, $exception);
-        }
-
-        return $deferred->promise();
+        return $deferred->promise()
+            ->always(function () use ($task) {
+                $this->taskStorage->detach($task);
+            });
     }
 
     /**

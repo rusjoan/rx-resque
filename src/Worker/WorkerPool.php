@@ -138,7 +138,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
         $worker = new ProcessWorker($this->loop);
         $worker->start();
 
-        $this->workers->attach($worker, 0);
+        $this->workers->attach($worker);
 
         return $worker;
     }
@@ -155,7 +155,6 @@ class WorkerPool extends EventEmitter implements PoolInterface
         });
 
         return $worker->enqueue($task)
-            ->progress(func)
             ->always(function () use ($timer) {
                 $timer->cancel();
             })
@@ -186,13 +185,13 @@ class WorkerPool extends EventEmitter implements PoolInterface
             throw new \Exception("The pool is not running");
         }
 
-        if (!$this->idleWorkers->isEmpty()) {
-            $worker = $this->idleWorkers->shift();
-        } elseif ($this->workers->count() < $this->maxSize) {
-            $worker = $this->createWorker();
-        } else {
+        if (!$this->isIdle()) {
             throw new \Exception('All possible workers busy');
         }
+
+        $worker = !$this->idleWorkers->isEmpty() ?
+            $this->idleWorkers->shift() :
+            $this->createWorker();
 
         $this->busyWorkers->push($worker);
         $this->emit('status', [$this->isIdle()]);

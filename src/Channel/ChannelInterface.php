@@ -6,6 +6,8 @@
 
 namespace RxResque\Channel;
 
+use React\Promise\Promise;
+
 interface ChannelInterface
 {
     /**
@@ -13,13 +15,12 @@ interface ChannelInterface
      *
      * @param mixed $data
      */
-    public function publish($data);
+    public function send($data);
 
     /**
      * Subscribe fn on received data
      *
-     * @param callable $onData
-     * @param callable $onError
+     * @return Promise
      */
-    public function subscribe(callable $onData, callable $onError);
+    public function receive(): Promise;
 }

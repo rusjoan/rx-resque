@@ -14,9 +14,4 @@ interface ProcessInterface
      * @return int PID of process.
      */
     public function getPid(): int;
-
-    /**
-     * @param int $signo
-     */
-    public function signal(int $signo);
 }

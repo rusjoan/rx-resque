@@ -33,13 +33,20 @@ ob_start(function ($data) {
 
 $loop = \React\EventLoop\Factory::create();
 
-$channel = new \RxResque\Channel\StreamedChannel(new \React\Stream\Stream(STDIN, $loop), new \React\Stream\Stream(STDOUT, $loop));
-$channel->subscribe(
+$stdin = new \React\Stream\Stream(STDIN, $loop);
+$stdout = new \React\Stream\Stream(STDOUT, $loop);
+
+$channel = new \RxResque\Channel\ChannelSubject($stdin, $stdout);
+$channel->subscribeCallback(
     function ($task) use ($channel) {
-        $task->run();
-        $channel->publish($task->value);
+        try {
+            $task->run();
+            $channel->onNext($task->value);
+        } catch (\Throwable $exception) {
+            $channel->onNext($exception->getMessage());
+        }
     },
-    function () {
+    function (\Throwable $e) use ($channel) {
 
     }
 );

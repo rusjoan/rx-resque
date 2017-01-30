@@ -10,8 +10,10 @@ namespace RxResque\Process;
 
 use React\ChildProcess\Process;
 use React\EventLoop\LoopInterface;
-use RxResque\Channel\ChannelInterface;
-use RxResque\Channel\StreamedChannel;
+use React\Promise\Promise;
+use Rx\React\Promise as RxPromise;
+use Rx\Subject\Subject;
+use RxResque\Channel\ChannelSubject;
 use RxResque\StrandInterface;
 
 class ChanneledProcess implements ProcessInterface, StrandInterface
@@ -22,7 +24,7 @@ class ChanneledProcess implements ProcessInterface, StrandInterface
     /** @var Process */
     private $process;
 
-    /** @var ChannelInterface */
+    /** @var Subject */
     private $channel;
 
     public function __construct(LoopInterface $loop, string $path, string $cwd = "", array $env = [])
@@ -39,23 +41,23 @@ class ChanneledProcess implements ProcessInterface, StrandInterface
     public function start()
     {
         $this->process->start($this->loop);
-        $this->channel = new StreamedChannel($this->process->stdout, $this->process->stdin);
+        $this->channel = new ChannelSubject($this->process->stdout, $this->process->stdin, $this->process->stderr);
     }
 
     /**
      * @inheritdoc
      */
-    public function publish($data)
+    public function send($data)
     {
-        $this->channel->publish($data);
+        $this->channel->onNext($data);
     }
 
     /**
      * @inheritdoc
      */
-    public function subscribe(callable $onData, callable $onError)
+    public function receive(): Promise
     {
-        $this->channel->subscribe($onData, $onError);
+        return RxPromise::fromObservable($this->channel->take(1));
     }
 
     /**
@@ -80,13 +82,5 @@ class ChanneledProcess implements ProcessInterface, StrandInterface
     public function getPid(): int
     {
         return $this->process->getPid();
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function signal(int $signo)
-    {
-        // TODO
     }
 }
