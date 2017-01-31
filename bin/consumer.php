@@ -19,10 +19,12 @@ $pollRedis = function ($queue, $interval = 10) use ($client) {
 
 $pauser = new \Rx\Subject\Subject();
 
-$pool = new WorkerPool($loop, 1, 1);
+$pool = new WorkerPool($loop, 0, 4);
 $pool->on('status', function ($isIdle) use ($pauser) {
     $pauser->onNext($isIdle);
 });
+
+$consumed = 0;
 
 /** @var Observable $redisStream */
 $redisStream = Observable::start(function () {})
@@ -41,9 +43,10 @@ $taskStream = $redisStream
     });
 
 $taskStream->subscribeCallback(
-    function (\RxResque\Task\TaskInterface $task) use ($pool) {
+    function (\RxResque\Task\TaskInterface $task) use ($pool, &$consumed) {
         $pool->enqueue($task)
-            ->then(function ($data) use ($task) {
+            ->then(function ($data) use ($task, &$consumed) {
+                ++$consumed;
                 echo "SENT $task->value RECEIVED $data done!\n";
             })
             ->otherwise(function (\Throwable $exception) {
@@ -55,8 +58,8 @@ $taskStream->subscribeCallback(
     }
 );
 
-$loop->addPeriodicTimer(10, function () use ($pool) {
-   printf("Active: %d, Free: %d\n", $pool->getBusyWorkerCount(), $pool->getIdleWorkerCount());
+$loop->addPeriodicTimer(20, function () use ($pool, &$consumed) {
+   printf("Active: %d, Free: %d, Consumed: %d\n", $pool->getBusyWorkerCount(), $pool->getIdleWorkerCount(), $consumed);
 });
 
 $pool->start();

@@ -10,6 +10,7 @@ namespace RxResque\Worker;
 
 use Evenement\EventEmitter;
 use React\EventLoop\LoopInterface;
+use React\Promise\Deferred;
 use React\Promise\Promise;
 use RxResque\Task\TaskInterface;
 
@@ -148,19 +149,36 @@ class WorkerPool extends EventEmitter implements PoolInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        $worker = $this->pull();
+        $deferred = new Deferred();
 
-        $timer = $this->loop->addTimer(60, function () use ($worker) {
-            $worker->kill();
-        });
+        try {
+            $worker = $this->pull();
 
-        return $worker->enqueue($task)
-            ->always(function () use ($timer) {
-                $timer->cancel();
-            })
-            ->always(function () use ($worker) {
-                $this->push($worker);
+            $timer = $this->loop->addTimer(10, function () use ($worker, $deferred) {
+                $deferred->reject(new \Exception('Timeout!!!'));
+                $worker->kill();
             });
+
+            $worker->enqueue($task)
+                ->always(function () use ($timer) {
+                    $timer->cancel();
+                })
+                ->always(function () use ($worker) {
+                    $this->push($worker);
+                })
+                ->then(
+                    function ($data) use ($deferred) {
+                        $deferred->resolve($data);
+                    },
+                    function (\Throwable $exception) use ($deferred) {
+                        $deferred->reject($exception);
+                    }
+                );
+        } catch (\Throwable $exception) {
+            $deferred->reject($exception);
+        }
+
+        return $deferred->promise();
     }
 
     /**

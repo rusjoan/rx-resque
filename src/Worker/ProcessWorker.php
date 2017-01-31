@@ -61,10 +61,12 @@ class ProcessWorker implements WorkerInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        $this->isIdle = false;
         $deferred = new Deferred();
 
         switch (true) {
+            case !$this->isIdle():
+                $deferred->reject(new \Exception('The worker is busy'));
+                break;
             case !$this->strand->isRunning():
                 $deferred->reject(new \Exception('The worker has not been started.'));
                 break;
@@ -72,15 +74,24 @@ class ProcessWorker implements WorkerInterface
                 $deferred->reject(new \Exception('The worker has been shut down.'));
                 break;
             default:
+                $this->isIdle = false;
                 $this->strand->send($task);
-                $deferred->resolve($this->strand->receive());
+                $this->strand->receive()
+                    ->then(
+                        function ($data) use ($deferred) {
+                            $deferred->resolve($data);
+                        },
+                        function (\Throwable $exception) use ($deferred) {
+                            $deferred->reject($exception);
+                        }
+                    )
+                    ->always(function () {
+                        $this->isIdle = true;
+                    });
                 break;
         }
 
-        return $deferred->promise()
-            ->always(function () use ($task) {
-                $this->isIdle = true;
-            });
+        return $deferred->promise();
     }
 
     /**

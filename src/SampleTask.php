@@ -24,7 +24,7 @@ class SampleTask implements TaskInterface
      */
     public function run()
     {
-        $sleep = rand(5, 6);
+        $sleep = rand(1, 10)/10;
         sleep($sleep);
     }
 }
