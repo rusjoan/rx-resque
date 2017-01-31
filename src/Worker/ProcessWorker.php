@@ -20,8 +20,8 @@ class ProcessWorker implements WorkerInterface
     /** @var StrandInterface */
     private $strand;
 
-    /** @var \SplObjectStorage */
-    private $taskStorage;
+    /** @var bool */
+    private $isIdle = true;
 
     /** @var bool */
     private $shutdown = false;
@@ -30,7 +30,6 @@ class ProcessWorker implements WorkerInterface
     {
         $dir = \dirname(__DIR__, 2) . '/bin';
         $this->strand = new ChanneledProcess($loop, "$dir/worker.php", $dir);
-        $this->taskStorage = new \SplObjectStorage();
     }
 
     /**
@@ -46,7 +45,7 @@ class ProcessWorker implements WorkerInterface
      */
     public function isIdle(): bool
     {
-        return $this->taskStorage->count() === 0;
+        return $this->isIdle;
     }
 
     /**
@@ -62,7 +61,7 @@ class ProcessWorker implements WorkerInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        $this->taskStorage->attach($task);
+        $this->isIdle = false;
         $deferred = new Deferred();
 
         switch (true) {
@@ -75,21 +74,12 @@ class ProcessWorker implements WorkerInterface
             default:
                 $this->strand->send($task);
                 $deferred->resolve($this->strand->receive());
-                /*
-                    ->then(
-                        function ($data) use ($deferred) {
-                            $deferred->resolve($data);
-                        },
-                        function (\Throwable $exception) use ($deferred) {
-                            $deferred->reject($exception);
-                        }
-                    );*/
                 break;
         }
 
         return $deferred->promise()
             ->always(function () use ($task) {
-                $this->taskStorage->detach($task);
+                $this->isIdle = true;
             });
     }
 
