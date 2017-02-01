@@ -47,16 +47,33 @@ $taskStream->subscribeCallback(
         $pool->enqueue($task)
             ->then(function ($data) use ($task, &$consumed) {
                 ++$consumed;
-                echo "SENT $task->value RECEIVED $data done!\n";
+                echo "$task->value has done successfully with exit $data!\n";
+            })
+            ->otherwise(function (\RxResque\Exception\TaskException $exception) {
+                echo "TaskException with error {$exception->getMessage()}\n";
+            })
+            ->otherwise(function (\React\Promise\Timer\TimeoutException $exception) {
+                echo "TIMEOUT {$exception->getMessage()}\n";
+            })
+            ->otherwise(function (\RxResque\Exception\ContextException $exception) {
+                echo "Context exception '{$exception->getMessage()}' occurred! Retrying...\n";
             })
             ->otherwise(function (\Throwable $exception) {
-                echo "Error {$exception->getMessage()}\n";
-            });
+                echo $exception->getMessage() . PHP_EOL;
+            })
+        ;
     },
     function (\Throwable $exception) {
         throw $exception;
+    },
+    function () {
+        echo 'COMPLETED';
     }
 );
+
+//$loop->addTimer(12, function () use ($pauser) {
+//   $pauser->onCompleted();
+//});
 
 $loop->addPeriodicTimer(20, function () use ($pool, &$consumed) {
    printf("Active: %d, Free: %d, Consumed: %d\n", $pool->getBusyWorkerCount(), $pool->getIdleWorkerCount(), $consumed);

@@ -18,7 +18,7 @@ interface ChannelInterface
     public function send($data);
 
     /**
-     * Subscribe fn on received data
+     * Receive data from channel in future
      *
      * @return Promise
      */

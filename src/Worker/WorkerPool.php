@@ -10,8 +10,9 @@ namespace RxResque\Worker;
 
 use Evenement\EventEmitter;
 use React\EventLoop\LoopInterface;
-use React\Promise\Deferred;
 use React\Promise\Promise;
+use React\Promise\Timer\TimeoutException;
+use RxResque\Exception\ContextException;
 use RxResque\Task\TaskInterface;
 
 class WorkerPool extends EventEmitter implements PoolInterface
@@ -45,11 +46,11 @@ class WorkerPool extends EventEmitter implements PoolInterface
         $this->maxSize = $maxSize === -1 ? self::DEFAULT_MAX_SIZE : $maxSize;
 
         if ($this->minSize < 0) {
-            throw new \Error('Minimum size must be a non-negative integer.');
+            throw new ContextException('Minimum size must be a non-negative integer.');
         }
 
         if ($this->maxSize < 0 || $this->maxSize < $this->minSize) {
-            throw new \Error('Maximum size must be a non-negative integer at least ' . $minSize . '.');
+            throw new ContextException('Maximum size must be a non-negative integer at least ' . $minSize . '.');
         }
 
         $this->workers = new \SplObjectStorage();
@@ -116,7 +117,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
     public function start()
     {
         if ($this->isRunning()) {
-            throw new \Exception('The worker pool has already been started.');
+            throw new ContextException('The worker pool has already been started.');
         }
 
         $count = $this->minSize;
@@ -135,7 +136,8 @@ class WorkerPool extends EventEmitter implements PoolInterface
      *
      * @return WorkerInterface The worker created.
      */
-    private function createWorker(): WorkerInterface {
+    private function createWorker(): WorkerInterface
+    {
         $worker = new ProcessWorker($this->loop);
         $worker->start();
 
@@ -149,36 +151,18 @@ class WorkerPool extends EventEmitter implements PoolInterface
      */
     public function enqueue(TaskInterface $task): Promise
     {
-        $deferred = new Deferred();
+        $worker = $this->pull();
 
-        try {
-            $worker = $this->pull();
-
-            $timer = $this->loop->addTimer(10, function () use ($worker, $deferred) {
-                $deferred->reject(new \Exception('Timeout!!!'));
-                $worker->kill();
+        $promise = $worker->enqueue($task)
+            ->always(function () use ($worker) {
+                $this->push($worker);
             });
 
-            $worker->enqueue($task)
-                ->always(function () use ($timer) {
-                    $timer->cancel();
-                })
-                ->always(function () use ($worker) {
-                    $this->push($worker);
-                })
-                ->then(
-                    function ($data) use ($deferred) {
-                        $deferred->resolve($data);
-                    },
-                    function (\Throwable $exception) use ($deferred) {
-                        $deferred->reject($exception);
-                    }
-                );
-        } catch (\Throwable $exception) {
-            $deferred->reject($exception);
-        }
-
-        return $deferred->promise();
+        return \React\Promise\Timer\timeout($promise, 5, $this->loop)
+            ->otherwise(function (TimeoutException $exception) use ($worker) {
+                $worker->kill();
+                throw $exception;
+            });
     }
 
     /**
@@ -200,11 +184,11 @@ class WorkerPool extends EventEmitter implements PoolInterface
     protected function pull(): WorkerInterface
     {
         if (!$this->isRunning()) {
-            throw new \Exception("The pool is not running");
+            throw new ContextException("The pool is not running");
         }
 
         if (!$this->isIdle()) {
-            throw new \Exception('All possible workers busy');
+            throw new ContextException('All possible workers busy');
         }
 
         $worker = !$this->idleWorkers->isEmpty() ?
@@ -220,7 +204,7 @@ class WorkerPool extends EventEmitter implements PoolInterface
     protected function push(WorkerInterface $worker)
     {
         if (!$this->workers->contains($worker)) {
-            throw new \Exception("The provided worker was not part of this queue");
+            throw new ContextException("The provided worker was not part of this queue");
         }
 
         $key = array_search($worker, (array)$this->busyWorkers);

@@ -24,7 +24,10 @@ class SampleTask implements TaskInterface
      */
     public function run()
     {
-        $sleep = rand(1, 10)/10;
+        $sleep = rand(6, 9);
+        /*if ($sleep == 4 || $sleep == 5) {
+            throw new \Exception('kek, i happened');
+        }*/
         sleep($sleep);
     }
 }

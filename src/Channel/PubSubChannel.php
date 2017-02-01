@@ -7,10 +7,8 @@
 namespace RxResque\Channel;
 
 use React\Stream\Stream;
-use Rx\ObserverInterface;
-use Rx\Subject\Subject;
 
-class ChannelSubject extends Subject
+class PubSubChannel implements PubSubChannelInterface, StreamChannelInterface
 {
     /** @var Stream */
     private $read;
@@ -27,7 +25,7 @@ class ChannelSubject extends Subject
     /**
      * @inheritdoc
      */
-    public function onNext($data)
+    public function publish($data)
     {
         $serialized = serialize($data);
         $this->write->write($serialized);
@@ -36,21 +34,17 @@ class ChannelSubject extends Subject
     /**
      * @inheritdoc
      */
-    public function subscribe(ObserverInterface $observer, $scheduler = null)
+    public function subscribe(callable $onData, callable $onError, callable $onClose)
     {
-        parent::subscribe($observer, $scheduler);
-
-        $this->read->on('data', function ($serialized) {
+        $this->read->on('data', function ($raw) use ($onData, $onError) {
             try {
-                $data = unserialize($serialized);
-                parent::onNext($data);
+                $data = unserialize($raw);
+                $onData($data);
             } catch (\Throwable $exception) {
-                $this->onError($exception);
+                $onError($exception);
             }
         });
 
-        $this->read->on('close', function () {
-            $this->onError(new \Exception('Context has died'));
-        });
+        $this->read->on('close', $onClose);
     }
 }

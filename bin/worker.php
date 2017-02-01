@@ -36,18 +36,21 @@ $loop = \React\EventLoop\Factory::create();
 $stdin = new \React\Stream\Stream(STDIN, $loop);
 $stdout = new \React\Stream\Stream(STDOUT, $loop);
 
-$channel = new \RxResque\Channel\ChannelSubject($stdin, $stdout);
-$channel->subscribeCallback(
+$channel = new \RxResque\Channel\PubSubChannel($stdin, $stdout);
+$channel->subscribe(
     function ($task) use ($channel) {
         try {
-            $task->run();
-            $channel->onNext($task->value);
+            $result = new \RxResque\Task\SuccessfulTask($task->run());
         } catch (\Throwable $exception) {
-            $channel->onNext($exception->getMessage());
+            $result = new \RxResque\Task\FailedTask($exception);
+        } finally {
+            $channel->publish($result);
         }
     },
     function (\Throwable $e) use ($channel) {
-
+        file_put_contents( __DIR__ . '/log.log', $e->getMessage(), FILE_APPEND);
+    },
+    function () {
     }
 );
 

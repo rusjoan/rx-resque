@@ -14,6 +14,7 @@ use React\Promise\Promise;
 use RxResque\Process\ChanneledProcess;
 use RxResque\StrandInterface;
 use RxResque\Task\TaskInterface;
+use RxResque\Task\TaskResultInterface;
 
 class ProcessWorker implements WorkerInterface
 {
@@ -76,18 +77,15 @@ class ProcessWorker implements WorkerInterface
             default:
                 $this->isIdle = false;
                 $this->strand->send($task);
-                $this->strand->receive()
-                    ->then(
-                        function ($data) use ($deferred) {
-                            $deferred->resolve($data);
-                        },
-                        function (\Throwable $exception) use ($deferred) {
-                            $deferred->reject($exception);
-                        }
-                    )
-                    ->always(function () {
-                        $this->isIdle = true;
-                    });
+                $deferred->resolve(
+                    $this->strand->receive()
+                        ->then(function (TaskResultInterface $taskResult) {
+                            return $taskResult->getResult();
+                        })
+                        ->always(function () {
+                            $this->isIdle = true;
+                        })
+                );
                 break;
         }
 
